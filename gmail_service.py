@@ -53,27 +53,18 @@ def get_auth_url():
     flow = Flow.from_client_config(
         get_google_client_config(),
         scopes=SCOPES,
-        redirect_uri=get_redirect_uri()
+        redirect_uri=get_redirect_uri(),
+        autogenerate_code_verifier=True
     )
-
-    # Generate PKCE verifier
-    code_verifier = (
-        base64.urlsafe_b64encode(
-            __import__("secrets").token_bytes(32)
-        )
-        .decode("utf-8")
-        .rstrip("=")
-    )
-
-    st.session_state.oauth_code_verifier = code_verifier
 
     authorization_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="consent",
-        code_challenge_method="S256",
-        code_verifier=code_verifier
+        prompt="consent"
     )
+
+    # Save state and verifier for callback
+    st.session_state.oauth_code_verifier = flow.code_verifier
 
     return authorization_url, state
 
@@ -99,7 +90,8 @@ def get_gmail_service(code, state):
         get_google_client_config(),
         scopes=SCOPES,
         state=state,
-        redirect_uri=get_redirect_uri()
+        redirect_uri=get_redirect_uri(),
+        autogenerate_code_verifier=False
     )
 
     flow.fetch_token(
@@ -115,7 +107,7 @@ def get_gmail_service(code, state):
         credentials=credentials
     )
 
-    # Remove verifier after successful authentication
+    # Clear verifier after successful authentication
     st.session_state.oauth_code_verifier = None
 
     return service
@@ -200,6 +192,10 @@ def decode_body(data):
 
 def extract_email_body(payload):
 
+    # ----------------------------------------------
+    # Direct body
+    # ----------------------------------------------
+
     body_data = (
         payload
         .get("body", {})
@@ -212,12 +208,17 @@ def extract_email_body(payload):
             body_data
         )
 
+
+    # ----------------------------------------------
+    # Multipart email
+    # ----------------------------------------------
+
     parts = payload.get(
         "parts",
         []
     )
 
-    # Look for text/plain
+    # First look for text/plain
     for part in parts:
 
         mime_type = part.get(
@@ -239,7 +240,11 @@ def extract_email_body(payload):
                     data
                 )
 
+
+    # ----------------------------------------------
     # Search nested parts
+    # ----------------------------------------------
+
     for part in parts:
 
         if "parts" in part:
@@ -251,6 +256,7 @@ def extract_email_body(payload):
             if nested_body:
 
                 return nested_body
+
 
     return ""
 
@@ -366,14 +372,22 @@ def is_financial_email(
         + body_text
     )
 
+
+    # ----------------------------------------------
     # Remove obvious non-financial emails
+    # ----------------------------------------------
+
     for keyword in EXCLUSION_KEYWORDS:
 
         if keyword in full_text:
 
             return False
 
+
+    # ----------------------------------------------
     # Check financial keyword
+    # ----------------------------------------------
+
     financial_match = False
 
     for keyword in FINANCIAL_KEYWORDS:
@@ -384,11 +398,16 @@ def is_financial_email(
 
             break
 
+
     if not financial_match:
 
         return False
 
+
+    # ----------------------------------------------
     # Check financial context
+    # ----------------------------------------------
+
     context_match = False
 
     for keyword in FINANCIAL_CONTEXT_KEYWORDS:
@@ -399,8 +418,10 @@ def is_financial_email(
 
             break
 
+
     if context_match:
 
         return True
+
 
     return False
