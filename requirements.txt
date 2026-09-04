@@ -1,0 +1,10 @@
+streamlit
+pandas
+plotly
+python-dotenv
+pydantic
+groq
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
