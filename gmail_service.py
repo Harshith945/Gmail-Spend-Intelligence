@@ -54,7 +54,7 @@ def get_auth_url():
         get_google_client_config(),
         scopes=SCOPES,
         redirect_uri=get_redirect_uri(),
-        autogenerate_code_verifier=True
+        autogenerate_code_verifier=False
     )
 
     authorization_url, state = flow.authorization_url(
@@ -62,9 +62,6 @@ def get_auth_url():
         include_granted_scopes="true",
         prompt="consent"
     )
-
-    # Save state and verifier for callback
-    st.session_state.oauth_code_verifier = flow.code_verifier
 
     return authorization_url, state
 
@@ -75,17 +72,6 @@ def get_auth_url():
 
 def get_gmail_service(code, state):
 
-    code_verifier = st.session_state.get(
-        "oauth_code_verifier"
-    )
-
-    if not code_verifier:
-
-        raise Exception(
-            "OAuth code verifier is missing. "
-            "Please click Connect Gmail again."
-        )
-
     flow = Flow.from_client_config(
         get_google_client_config(),
         scopes=SCOPES,
@@ -95,8 +81,7 @@ def get_gmail_service(code, state):
     )
 
     flow.fetch_token(
-        code=code,
-        code_verifier=code_verifier
+        code=code
     )
 
     credentials = flow.credentials
@@ -106,9 +91,6 @@ def get_gmail_service(code, state):
         "v1",
         credentials=credentials
     )
-
-    # Clear verifier after successful authentication
-    st.session_state.oauth_code_verifier = None
 
     return service
 
